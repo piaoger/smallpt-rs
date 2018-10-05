@@ -8,9 +8,12 @@ extern crate bvh;
 extern crate nalgebra;
 extern crate num_cpus;
 extern crate rand;
+#[cfg(feature = "parallel")]
 extern crate rayon;
 
 use rand::prelude::*;
+
+#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::f32::consts::PI;
 use std::path::PathBuf;
@@ -66,46 +69,75 @@ pub fn trace(
 	samples: u32,
 	backbuffer: &mut [Vec3],
 	rays: &mut usize,
-) {
+	f:   fn(&str) -> (),
+)
+{
 	let ray_count = AtomicUsize::new(0);
 	let inv_width = 1.0 / width as f32;
 	let inv_height = 1.0 / height as f32;
 	let inv_samples = 1.0 / samples as f32;
 
+	f("trace start ....");
+
+
+// For some row i in d, compute all results for a row in r
+    let step_row = |(j, row): (usize, &mut [Vec3])| {
+
+		row.iter_mut().enumerate().for_each(|(i, output)| {
+
+			f("enumerate ...");
+
+			let mut radiance = Vec3::zeros();
+			let mut num_rays = 0;
+			let mut rng = thread_rng();
+
+			f("enumerate rng ...");
+			for _ in 0..samples {
+				let rnd_x: f32 = rng.gen();
+				let rnd_y: f32 = rng.gen();
+				let dx = ((i as f32 + rnd_x) * inv_width) - 0.5;
+				let dy = ((j as f32 + rnd_y) * inv_height) - 0.5;
+
+				// Compute V
+				let v = camera.forward + camera.right * dx - camera.up * dy;
+
+				// Spawn a ray
+				let ray = Ray {
+					origin: camera.origin + v * 10.0,
+					direction: v.normalize(),
+				};
+
+				f("compute enumerate rng  ...");
+				radiance += compute_radiance(ray, &scene, 0, &mut num_rays);
+			}
+
+			ray_count.fetch_add(num_rays, Ordering::Relaxed);
+			*output = radiance * inv_samples;
+		});
+    };
+
+
+
 	// For each row of pixels
+	#[cfg(feature = "parallel")]
 	backbuffer
 		.par_chunks_mut(width as usize)
 		.enumerate()
-		.for_each(|(j, row)| {
-			row.iter_mut().enumerate().for_each(|(i, output)| {
-				let mut radiance = Vec3::new(0.0, 0.0, 0.0);
-				let mut num_rays = 0;
-				let mut rng = thread_rng();
+		.for_each(
+			step_row
+		 );
 
-				for _ in 0..samples {
-					let rnd_x: f32 = rng.gen();
-					let rnd_y: f32 = rng.gen();
-					let dx = ((i as f32 + rnd_x) * inv_width) - 0.5;
-					let dy = ((j as f32 + rnd_y) * inv_height) - 0.5;
+	#[cfg(not(feature = "parallel"))]
+		backbuffer
+		.chunks_mut(width as usize)
+		.enumerate()
+		.for_each(
+			step_row
+		 );
 
-					// Compute V
-					let v = camera.forward + camera.right * dx - camera.up * dy;
-
-					// Spawn a ray
-					let ray = Ray {
-						origin: camera.origin + v * 10.0,
-						direction: v.normalize(),
-					};
-
-					radiance += compute_radiance(ray, &scene, 0, &mut num_rays);
-				}
-
-				ray_count.fetch_add(num_rays, Ordering::Relaxed);
-				*output = radiance * inv_samples;
-			});
-		});
-
+	f("trace load start ....");
 	*rays = ray_count.load(Ordering::Relaxed);
+	f("trace load end ....");
 }
 
 fn luminance(color: Vec3) -> f32 {

@@ -15,16 +15,28 @@ exclude = ["images/*"]
 travis-ci = { repository = "zigguratvertigo/smallpt-rs" }
 
 [dependencies]
-rayon = "1.0.1"
-rand = "0.5.3"
+ 
+ 
 num_cpus = "1.8.0"
 log = "0.4.3"
 nalgebra = "0.15"
 bvh = { git = "https://github.com/zigguratvertigo/bvh.git" }
+[dependencies.rand]
+git = "https://github.com/rust-random/rand.git"
+features = [ "wasm-bindgen" ]
 
 [dev-dependencies]
 minifb = "0.10.6"
 structopt = "0.2.10"
 
+[dependencies.rayon]
+optional = true
+version = "^1.0.0"
+
 [build-dependencies.mml]
 version = "0.1"
+
+[features]
+default = ["parallel"]
+parallel = ["rayon"]
+wasm = []
