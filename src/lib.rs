@@ -69,7 +69,7 @@ pub fn trace(
 	samples: u32,
 	backbuffer: &mut [Vec3],
 	rays: &mut usize,
-	f:   fn(&str) -> (),
+	_feedback: fn(&str) -> (),
 )
 {
 	let ray_count = AtomicUsize::new(0);
@@ -77,21 +77,15 @@ pub fn trace(
 	let inv_height = 1.0 / height as f32;
 	let inv_samples = 1.0 / samples as f32;
 
-	f("trace start ....");
-
-
-// For some row i in d, compute all results for a row in r
-    let step_row = |(j, row): (usize, &mut [Vec3])| {
+	// For some row i in d, compute all results for a row in r
+	let step_row = |(j, row): (usize, &mut [Vec3])| {
 
 		row.iter_mut().enumerate().for_each(|(i, output)| {
-
-			f("enumerate ...");
 
 			let mut radiance = Vec3::zeros();
 			let mut num_rays = 0;
 			let mut rng = thread_rng();
 
-			f("enumerate rng ...");
 			for _ in 0..samples {
 				let rnd_x: f32 = rng.gen();
 				let rnd_y: f32 = rng.gen();
@@ -107,7 +101,6 @@ pub fn trace(
 					direction: v.normalize(),
 				};
 
-				f("compute enumerate rng  ...");
 				radiance += compute_radiance(ray, &scene, 0, &mut num_rays);
 			}
 
@@ -135,9 +128,7 @@ pub fn trace(
 			step_row
 		 );
 
-	f("trace load start ....");
 	*rays = ray_count.load(Ordering::Relaxed);
-	f("trace load end ....");
 }
 
 fn luminance(color: Vec3) -> f32 {
